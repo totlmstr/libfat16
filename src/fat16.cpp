@@ -5,6 +5,20 @@
 #include <algorithm>
 
 namespace Fat16 {
+    // https://www.win.tue.nl/~aeb/linux/fs/fat/fat-1.html
+    // reserved blocks -> fat -> root directory -> data area
+    std::uint32_t BootBlock::fat_region_start() const {
+        return num_reserved_blocks * bytes_per_block;
+    }
+
+    std::uint32_t BootBlock::root_directory_region_start() const {
+        return fat_region_start() + (num_fat * num_blocks_per_fat) * bytes_per_block;
+    }
+
+    std::uint32_t BootBlock::data_region_start() const {
+        return root_directory_region_start() + (num_root_dirs * sizeof(FundamentalEntry));
+    }
+
     std::string FundamentalEntry::get_filename() {
         EntryType etype = get_entry_type_from_filename();
         std::string fname(reinterpret_cast<char*>(filename));
@@ -49,13 +63,13 @@ namespace Fat16 {
         const std::uint32_t current = get_current_image_offset();
 
         // Seek to beginning of the FAT
-        seek_func(userdata, boot_block.bytes_per_block, IMAGE_SEEK_MODE_BEG);
-
+        seek_func(userdata, boot_block.fat_region_start() + (target * 2), IMAGE_SEEK_MODE_BEG);
         ClusterID next = 0;
+    
         if (read_func(userdata, &next, sizeof(ClusterID)) != sizeof(ClusterID)) {
             return 0;
         }
-
+        
         seek_func(userdata, current, IMAGE_SEEK_MODE_BEG);
         return next;
     }
@@ -85,13 +99,8 @@ namespace Fat16 {
         }
 
         // Add the FAT with the boot block, then add the root directory entries size
-        offset_start_data_area = boot_block.bytes_per_block * (boot_block.num_blocks_per_fat * boot_block.num_fat + 1);
-        offset_start_data_area += ((sizeof(FundamentalEntry) * boot_block.num_root_dirs + boot_block.bytes_per_block - 1) / boot_block.bytes_per_block)
-            * boot_block.bytes_per_block;
+        offset_start_data_area = boot_block.data_region_start();
         offset_start_data_area += offset_in_that_cluster;
-
-        // TODO: Maybe I miss something? Cause this is unatural, but it makes things work.
-        offset_start_data_area += boot_block.bytes_per_block;
 
         // Let's seek to that place.
         seek_func(userdata, offset_start_data_area, IMAGE_SEEK_MODE_BEG);
@@ -125,7 +134,7 @@ namespace Fat16 {
         std::uint32_t offset_root_dir = 0;
 
         // Add the FAT with the boot block, then add the root directory entries size
-        offset_root_dir = boot_block.bytes_per_block * (boot_block.num_blocks_per_fat * boot_block.num_fat + 1);
+        offset_root_dir = boot_block.root_directory_region_start();
         seek_func(userdata, offset_root_dir + entry.cursor_record, IMAGE_SEEK_MODE_BEG);
 
         LongFileNameEntry extended_entry;

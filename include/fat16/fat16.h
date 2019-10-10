@@ -29,6 +29,10 @@ namespace Fat16 {
         char file_sys_id[8];
         std::uint8_t bootstrap_code[0x1C0];
         std::uint16_t boot_block_sig;
+
+        std::uint32_t fat_region_start() const;
+        std::uint32_t root_directory_region_start() const;
+        std::uint32_t data_region_start() const;
     };
     #pragma pack(pop)
     
