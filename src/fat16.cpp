@@ -205,7 +205,7 @@ namespace Fat16 {
             std::u16string final_name;
 
             for (std::intptr_t j = extended_entries.size() - 1; j >= 0; j--) {
-                int i = 0;
+                volatile int i = 0;
 
                 while (extended_entries[j].name_part_1[i] != 0 && i < 5) {
                     final_name += extended_entries[j].name_part_1[i++];
