@@ -4,16 +4,30 @@
 #include <cassert>
 #include <cstdio>
 #include <vector>
+#include <string>
 
+#if COMPILE_CPP17
+#include <filesystem>
+namespace fs = std::filesystem;
+#elif COMPILE_CPP14
 #include <experimental/filesystem>
-
 namespace fs = std::experimental::filesystem;
+#else
+#include <boost/filesystem.hpp>
+namespace fs = boost::filesystem;
+#endif
 
 static void extract_file(Fat16::Image &img, Fat16::Entry &entry, const std::string &path) {
     const std::u16string filename_16 = entry.get_filename();
     const std::string filename = path + std::string(filename_16.begin(), filename_16.end());
 
-    FILE *f = fopen(filename.c_str(), "wb");
+    FILE *f;
+
+#ifdef WIN32
+    _wfopen_s(&f, filename.wstring().c_str(), L"wb");
+#else
+    f = fopen(filename.string().c_str(), "wb");
+#endif
 
     static constexpr std::uint32_t CHUNK_SIZE = 0x10000;
 
@@ -66,8 +80,17 @@ int main(int argc, char **argv) {
     if (argc < 2) {
         return false;
     }
-    
-    FILE *f = fopen(argv[1], "rb");
+
+    const fs::path file_path{ argv[1] };
+
+    FILE *f;
+
+#ifdef WIN32
+    _wfopen_s(&f, file_path.wstring().c_str(), L"rb");
+#else
+    f = fopen(file_path.string().c_str(), "rb");
+#endif
+
     Fat16::Image img(f,
         // Read hook
         [](void *userdata, void *buffer, std::uint32_t size) -> std::uint32_t {

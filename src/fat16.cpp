@@ -1,8 +1,10 @@
-#include <cstdio>
 #include <fat16/fat16.h>
+
+#include <cstdio>
 #include <cstddef>
 #include <iostream>
 #include <algorithm>
+#include <string>
 
 namespace Fat16 {
     // https://www.win.tue.nl/~aeb/linux/fs/fat/fat-1.html
@@ -58,18 +60,18 @@ namespace Fat16 {
     std::uint32_t Image::get_current_image_offset() {
         return seek_func(userdata, 0, IMAGE_SEEK_MODE_CUR);
     }
-    
+
     ClusterID Image::get_successor_cluster(const ClusterID target) {
         const std::uint32_t current = get_current_image_offset();
 
         // Seek to beginning of the FAT
         seek_func(userdata, boot_block.fat_region_start() + (target * 2), IMAGE_SEEK_MODE_BEG);
         ClusterID next = 0;
-    
+
         if (read_func(userdata, &next, sizeof(ClusterID)) != sizeof(ClusterID)) {
             return 0;
         }
-        
+
         seek_func(userdata, current, IMAGE_SEEK_MODE_BEG);
         return next;
     }
@@ -139,7 +141,7 @@ namespace Fat16 {
 
         LongFileNameEntry extended_entry;
         entry.extended_entries.clear();
-        
+
         do {
             if (entry.root) {
                 if (read_from_cluster(reinterpret_cast<std::uint8_t*>(&extended_entry), entry.cursor_record,
@@ -158,7 +160,7 @@ namespace Fat16 {
                 // Seek back
                 if (!entry.root)
                     seek_func(userdata, offset_root_dir + entry.cursor_record, IMAGE_SEEK_MODE_BEG);
-                
+
                 break;
             }
         } while (true && (entry.cursor_record / 32 != boot_block.num_root_dirs));
@@ -172,7 +174,7 @@ namespace Fat16 {
         } else if (read_func(userdata, &entry.entry, sizeof(FundamentalEntry)) != sizeof(FundamentalEntry)) {
             return false;
         }
-        
+
         entry.cursor_record += sizeof(FundamentalEntry);
 
         return true;
@@ -188,7 +190,7 @@ namespace Fat16 {
 
         return true;
     }
-    
+
     Image::Image(void *userdata, ImageReadFunc read_func, ImageSeekFunc seek_func)
         : read_func(read_func)
         , seek_func(seek_func)
@@ -214,13 +216,13 @@ namespace Fat16 {
                 if (i < 5 && extended_entries[j].name_part_1[i] == 0) {
                     break;
                 }
-                
+
                 i = 0;
 
                 while (extended_entries[j].name_part_2[i] != 0 && i < 6) {
                     final_name += extended_entries[j].name_part_2[i++];
                 }
-                
+
                 if (i < 6 && extended_entries[j].name_part_2[i] == 0) {
                     break;
                 }
@@ -230,7 +232,7 @@ namespace Fat16 {
                 while (extended_entries[j].name_part_3[i] != 0 && i < 2) {
                     final_name += extended_entries[j].name_part_3[i++];
                 }
-                
+
                 if (i < 2 && extended_entries[j].name_part_3[i] == 0) {
                     break;
                 }

@@ -1,0 +1,24 @@
+language: cpp
+
+git:
+  submodules: false
+
+script:
+  - bash $TRAVIS_BUILD_DIR/.travis/build.sh
+
+matrix:
+  include:
+  - os: osx
+    osx_image: xcode9.3
+    before_script:
+    - export CMAKE="cmake -DCOMPILE_MODERN_CPP=OFF"
+  - os: linux
+    sudo: required
+    before_script:
+    - export CMAKE="cmake -DCOMPILE_MODERN_CPP=OFF"
+    - sudo apt-get install -y libboost-filesystem-dev libboost-system-dev
+  - os: linux
+    dist: bionic
+    sudo: required
+    before_script:
+    - export CMAKE=cmake
