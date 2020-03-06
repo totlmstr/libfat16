@@ -1,12 +1,19 @@
 #include <fat16/fat16.h>
 
-#include <cstdio>
-#include <cstddef>
-#include <iostream>
 #include <algorithm>
+#include <cstring>
 #include <string>
 
 namespace Fat16 {
+    static const char *return_char(const std::string &final_name) {
+        return strdup(final_name.c_str());
+    }
+
+    static const char *convert_to_utf8_char(const std::u16string &final_name) {
+        const auto buffer = std::string(final_name.begin(), final_name.end());
+        return return_char(buffer);
+    }
+
     // https://www.win.tue.nl/~aeb/linux/fs/fat/fat-1.html
     // reserved blocks -> fat -> root directory -> data area
     std::uint32_t BootBlock::fat_region_start() const {
@@ -21,7 +28,7 @@ namespace Fat16 {
         return root_directory_region_start() + (num_root_dirs * sizeof(FundamentalEntry));
     }
 
-    std::string FundamentalEntry::get_filename() {
+    const char *FundamentalEntry::get_filename() {
         EntryType etype = get_entry_type_from_filename();
         std::string fname(reinterpret_cast<char*>(filename));
 
@@ -43,7 +50,7 @@ namespace Fat16 {
             fname.pop_back();
         }
 
-        return fname;
+        return return_char(fname);
     }
 
     EntryType FundamentalEntry::get_entry_type_from_filename() {
@@ -201,8 +208,8 @@ namespace Fat16 {
         }
     }
 
-    std::u16string Entry::get_filename() {
-        if (extended_entries.size() != 0) {
+    const char *Entry::get_filename() {
+        if (!extended_entries.empty()) {
             // Use name from extended entries
             std::u16string final_name;
 
@@ -238,13 +245,13 @@ namespace Fat16 {
                 }
             }
 
-            return final_name;
+            return convert_to_utf8_char(final_name);
         }
 
         // Use fundamental name.
         std::string final_name = entry.get_filename() + std::string(entry.filename_ext, 3);
         while (final_name.length() > 0 && final_name.back() == ' ') final_name.pop_back();
 
-        return std::u16string(final_name.begin(), final_name.end());
+        return return_char(final_name);
     }
 }

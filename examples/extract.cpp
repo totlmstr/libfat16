@@ -1,10 +1,7 @@
 #include <fat16/fat16.h>
 
-#include <algorithm>
-#include <cassert>
-#include <cstdio>
-#include <vector>
 #include <string>
+#include <vector>
 
 #if COMPILE_CPP17
 #include <filesystem>
@@ -17,9 +14,8 @@ namespace fs = std::experimental::filesystem;
 namespace fs = boost::filesystem;
 #endif
 
-static void extract_file(Fat16::Image &img, Fat16::Entry &entry, const std::string &path) {
-    const std::u16string filename_16 = entry.get_filename();
-    const std::string filename = path + std::string(filename_16.begin(), filename_16.end());
+static void extract_file(Fat16::Image &img, Fat16::Entry &entry, const fs::path &path) {
+    const auto filename = path / entry.get_filename();
 
     FILE *f;
 
@@ -52,7 +48,7 @@ static void extract_file(Fat16::Image &img, Fat16::Entry &entry, const std::stri
     fclose(f);
 }
 
-static void traverse_directory(Fat16::Image &img, Fat16::Entry mee, std::string dir_path) {
+static void traverse_directory(Fat16::Image &img, Fat16::Entry mee, const fs::path &dir_path) {
     fs::create_directories(dir_path);
 
     while (img.get_next_entry(mee)) {
@@ -64,9 +60,8 @@ static void traverse_directory(Fat16::Image &img, Fat16::Entry mee, std::string 
                 if (!img.get_first_entry_dir(mee, baby))
                     break;
 
-                auto dir_name = mee.get_filename();
-
-                traverse_directory(img, baby, dir_path + std::string(dir_name.begin(), dir_name.end()) + "\\");
+                const std::string dir_name = mee.get_filename();
+                traverse_directory(img, baby, dir_path / dir_name);
             }
         }
 
@@ -105,7 +100,8 @@ int main(int argc, char **argv) {
     });
 
     Fat16::Entry first;
-    traverse_directory(img, first, "");
+
+    traverse_directory(img, first, file_path.parent_path() / file_path.stem());
 
     fclose(f);
 }

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <string>
 #include <vector>
 
 namespace Fat16 {
@@ -34,7 +33,7 @@ namespace Fat16 {
         std::uint32_t data_region_start() const;
     };
     #pragma pack(pop)
-    
+
     enum class EntryType {
         FILE = 0,
         DIRECTORY = 1,
@@ -64,11 +63,11 @@ namespace Fat16 {
         std::uint16_t starting_cluster;
         std::uint32_t file_size;
 
-        std::string get_filename();
+        const char *get_filename();
         EntryType get_entry_type_from_filename();
     };
     #pragma pack(pop)
-    
+
     #pragma pack(push, 1)
     struct LongFileNameEntry {
         std::uint8_t position;
@@ -100,7 +99,7 @@ namespace Fat16 {
             , root(0) {
         }
 
-        std::u16string get_filename();
+        const char *get_filename();
     };
 
     // These functions all required return value to be little-endian.
@@ -123,7 +122,7 @@ namespace Fat16 {
 
         /**
          * \brief Get the next entry to given entry.
-         * 
+         *
          * \returns True if the number is valid and the get performs success.
          */
         bool get_next_entry(Entry &entry);
@@ -141,11 +140,11 @@ namespace Fat16 {
 
         /**
          * \brief   Reading data from the FAT image, starting at given cluster.
-         * 
+         *
          * \param   dest_buffer       The buffer contains read result.
          * \param   starting_cluster  The first cluster that contains the data.
          * \param   size              The size of data to read.
-         * 
+         *
          * \returns Number of bytes read.
          */
         std::uint32_t read_from_cluster(std::uint8_t *dest_buffer, const std::uint32_t offset,
@@ -168,4 +167,4 @@ namespace Fat16 {
     static_assert(sizeof(BootBlock) == 512, "Boot block size doesn't match to what expected.");
     static_assert(sizeof(FundamentalEntry) == 32, "Fundamental entry size doesn't match to what expected.");
     static_assert(sizeof(LongFileNameEntry) == 32, "LFN entry size doesn't match to what expected.");
-}
+} // namespace Fat16
