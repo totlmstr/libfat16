@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstdint>
-#include <vector>
 
 namespace Fat16 {
     #pragma pack(push, 1)
@@ -54,14 +53,14 @@ namespace Fat16 {
 
     #pragma pack(push, 1)
     struct FundamentalEntry {
-        std::uint8_t filename[8];
-        char filename_ext[3];
-        std::uint8_t file_attributes;
-        std::uint8_t reserved[10];
-        std::uint16_t last_modified_time;
-        std::uint16_t last_modified_date;
-        std::uint16_t starting_cluster;
-        std::uint32_t file_size;
+        std::uint8_t filename[8] = {};
+        char filename_ext[3] = {};
+        std::uint8_t file_attributes = 0;
+        std::uint8_t reserved[10] = {};
+        std::uint16_t last_modified_time = 0;
+        std::uint16_t last_modified_date = 0;
+        std::uint16_t starting_cluster = 0;
+        std::uint32_t file_size = 0;
 
         const char *get_filename();
         EntryType get_entry_type_from_filename();
@@ -70,35 +69,176 @@ namespace Fat16 {
 
     #pragma pack(push, 1)
     struct LongFileNameEntry {
-        std::uint8_t position;
-        char16_t name_part_1[5];
-        std::uint8_t attrib;
-        std::uint8_t type;
-        std::uint8_t checksum;
-        char16_t name_part_2[6];
-        std::uint16_t padding;
-        char16_t name_part_3[2];
+        std::uint8_t position{};
+        char16_t name_part_1[5] = {};
+        std::uint8_t attrib{};
+        std::uint8_t type{};
+        std::uint8_t checksum{};
+        char16_t name_part_2[6] = {};
+        std::uint16_t padding{};
+        char16_t name_part_3[2] = {};
     };
     #pragma pack(pop)
 
-    // Numbered from 2
-    using ClusterID = std::uint16_t;
+    // Comparison operators for LongFileNameEntry
+    inline bool operator<(const LongFileNameEntry &lhs, const LongFileNameEntry &rhs) {
+        return lhs.position < rhs.position;
+    }
+
+    inline bool operator>(const LongFileNameEntry &lhs, const LongFileNameEntry &rhs) {
+        return !(lhs < rhs);
+    }
+
+    inline bool operator==(const LongFileNameEntry &lhs, const LongFileNameEntry &rhs) {
+        return lhs.position == rhs.position;
+    }
+
+    inline bool operator!=(const LongFileNameEntry &lhs, const LongFileNameEntry &rhs) {
+        return !(lhs == rhs);
+    }
+
+    using ClusterID = std::uint16_t; // Numbered from 2
+
+    enum class ExtendedArrayError {
+        Success = 0,
+        HasEntry,
+        Empty,
+        InvalidEntry,
+        BadPosition,
+        CannotResize
+    };
 
     struct Entry {
     private:
+        struct Node {
+            Node *next{};
+            LongFileNameEntry *entry{};
+
+            Node() {
+                next = nullptr;
+            }
+
+            explicit Node(LongFileNameEntry *new_entry) {
+                entry = new_entry;
+            }
+        };
+
         friend struct Image;
-        std::uint32_t cursor_record;
-        ClusterID root;
 
-    public:
-        FundamentalEntry entry;
-        std::vector<LongFileNameEntry> extended_entries;
+        std::uint32_t cursor_record{};
+        ClusterID root{};
+        Node* extended_entries{};
+        unsigned int num_entries = 0;
 
-        explicit Entry()
-            : cursor_record(0)
-            , root(0) {
+        static Node *create_new(const LongFileNameEntry new_entry) {
+            const auto cur = new Node;
+            cur->entry = new LongFileNameEntry;
+            *cur->entry = new_entry;
+            return cur;
         }
 
+        void replace_head() {
+            auto cur = extended_entries;
+            extended_entries = extended_entries->next;
+            delete cur;
+            num_entries--;
+        }
+
+    public:
+        FundamentalEntry entry{};
+
+        Entry() {
+            extended_entries = nullptr;
+        }
+
+        ~Entry() {
+            clear();
+        }
+
+        LongFileNameEntry *top() const {
+            if (extended_entries != nullptr) {
+                return extended_entries->entry;
+            }
+            return nullptr;
+        }
+
+        unsigned int size() const {
+            return num_entries;
+        }
+
+        /**
+          * \brief Check if the stack is empty.
+          */
+        bool empty() const {
+            if (size() == 0) {
+                return true;
+            }
+            return false;
+        }
+
+        /**
+          * \brief Push a new entry into the extended_entries stack.
+          *
+          * \param new_entry The new extended entry to push.
+          * \param force (optional) Force the insertion of a new entry even if it is out of order.
+          *
+          * \return Success when successfully inserted,
+          * Error when cannot insert.
+          */
+        ExtendedArrayError push(const LongFileNameEntry new_entry, const bool force = false) {
+            if (empty()) {
+                extended_entries = create_new(new_entry);
+                num_entries++;
+                return ExtendedArrayError::Success;
+            }
+
+            if (new_entry < *top() || force) {
+                auto cur = create_new(new_entry);
+                cur->next = extended_entries;
+                extended_entries = cur;
+                num_entries++;
+                return ExtendedArrayError::Success;
+            }
+
+            return ExtendedArrayError::BadPosition;
+        }
+
+        /**
+          * \brief Remove the top entry in the stack.
+          *
+          * \return Success when successfully removed,
+          * Error when cannot remove.
+          */
+        ExtendedArrayError pop() {
+            if (empty()) {
+                return ExtendedArrayError::Empty;
+            }
+
+            if (extended_entries == nullptr) {
+                return ExtendedArrayError::InvalidEntry;
+            }
+
+            replace_head();
+
+            return ExtendedArrayError::Success;
+        }
+
+        /**
+          * \brief Remove all entries in the stack.
+          */
+        void clear() {
+            while (extended_entries != nullptr) {
+                replace_head();
+            }
+        }
+
+        /**
+          * \brief Get the filename from the stack, or get a fundamental name.
+          *
+          * After acquiring the name from the stack, the stack is cleared.
+          *
+          * \return An independent C string.
+          */
         const char *get_filename();
     };
 

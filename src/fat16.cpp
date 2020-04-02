@@ -10,8 +10,7 @@ namespace Fat16 {
     }
 
     static const char *convert_to_utf8_char(const std::u16string &final_name) {
-        const auto buffer = std::string(final_name.begin(), final_name.end());
-        return return_char(buffer);
+        return return_char(std::string(final_name.begin(), final_name.end()));
     }
 
     // https://www.win.tue.nl/~aeb/linux/fs/fat/fat-1.html
@@ -146,10 +145,8 @@ namespace Fat16 {
         offset_root_dir = boot_block.root_directory_region_start();
         seek_func(userdata, offset_root_dir + entry.cursor_record, IMAGE_SEEK_MODE_BEG);
 
-        LongFileNameEntry extended_entry;
-        entry.extended_entries.clear();
-
         do {
+            LongFileNameEntry extended_entry;
             if (entry.root) {
                 if (read_from_cluster(reinterpret_cast<std::uint8_t*>(&extended_entry), entry.cursor_record,
                         entry.root, sizeof(LongFileNameEntry)) != sizeof(LongFileNameEntry)) {
@@ -159,18 +156,18 @@ namespace Fat16 {
                 return false;
             }
 
-            if (extended_entry.attrib == 0x0F && extended_entry.padding == 0) {
-                // Definitely is
+            if (extended_entry.attrib == 0x0F && extended_entry.padding == 0) { // Definitely is
                 entry.cursor_record += sizeof(LongFileNameEntry);
-                entry.extended_entries.push_back(extended_entry);
-            } else {
-                // Seek back
+                if (entry.push(extended_entry) != ExtendedArrayError::Success)
+                    return false;
+
+            } else { // Seek back
                 if (!entry.root)
                     seek_func(userdata, offset_root_dir + entry.cursor_record, IMAGE_SEEK_MODE_BEG);
 
                 break;
             }
-        } while (true && (entry.cursor_record / 32 != boot_block.num_root_dirs));
+        } while (entry.cursor_record / 32 != boot_block.num_root_dirs);
 
         // Try to do fundamental entry read
         if (entry.root) {
@@ -209,42 +206,37 @@ namespace Fat16 {
     }
 
     const char *Entry::get_filename() {
-        if (!extended_entries.empty()) {
+        if (top() != nullptr) {
             // Use name from extended entries
             std::u16string final_name;
 
-            for (std::intptr_t j = extended_entries.size() - 1; j >= 0; j--) {
+            while (top() != nullptr) {
                 volatile int i = 0;
+                std::u16string cur_name{};
 
-                while (extended_entries[j].name_part_1[i] != 0 && i < 5) {
-                    final_name += extended_entries[j].name_part_1[i++];
+                while (top()->name_part_1[i] != 0 && i < 5) {
+                    cur_name += top()->name_part_1[i++];
                 }
 
-                if (i < 5 && extended_entries[j].name_part_1[i] == 0) {
-                    break;
+                if (!(top()->name_part_1[i] == 0 && i < 5)) {
+                    i = 0;
+
+                    while (top()->name_part_2[i] != 0 && i < 6) {
+                        cur_name += top()->name_part_2[i++];
+                    }
+
+                    if (!(top()->name_part_2[i] == 0 && i < 6)) {
+                        i = 0;
+
+                        while (top()->name_part_3[i] != 0 && i < 2) {
+                            cur_name += top()->name_part_3[i++];
+                        }
+                    }
                 }
 
-                i = 0;
-
-                while (extended_entries[j].name_part_2[i] != 0 && i < 6) {
-                    final_name += extended_entries[j].name_part_2[i++];
-                }
-
-                if (i < 6 && extended_entries[j].name_part_2[i] == 0) {
-                    break;
-                }
-
-                i = 0;
-
-                while (extended_entries[j].name_part_3[i] != 0 && i < 2) {
-                    final_name += extended_entries[j].name_part_3[i++];
-                }
-
-                if (i < 2 && extended_entries[j].name_part_3[i] == 0) {
-                    break;
-                }
+                final_name += cur_name;
+                this->pop();
             }
-
             return convert_to_utf8_char(final_name);
         }
 

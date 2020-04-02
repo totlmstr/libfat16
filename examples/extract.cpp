@@ -48,7 +48,7 @@ static void extract_file(Fat16::Image &img, Fat16::Entry &entry, const fs::path 
     fclose(f);
 }
 
-static void traverse_directory(Fat16::Image &img, Fat16::Entry mee, const fs::path &dir_path) {
+static void traverse_directory(Fat16::Image &img, Fat16::Entry &mee, const fs::path &dir_path) {
     fs::create_directories(dir_path);
 
     while (img.get_next_entry(mee)) {
